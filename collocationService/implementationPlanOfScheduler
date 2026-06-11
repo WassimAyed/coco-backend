@@ -1,0 +1,31 @@
+Implement Automated Offer Expiration
+We will add a scheduled task to check for expired collocation offers and send an email notification to the offer's owner. We will ensure duplicate emails are not sent by tracking notification state in the database.
+
+Proposed Changes
+Configuration & Dependencies
+[MODIFY] 
+pom.xml
+Add spring-boot-starter-mail dependency.
+[MODIFY] 
+application.properties
+Add spring email configuration with Gmail SMTP and the provided credentials.
+Entity & Repository Layers
+[MODIFY] 
+collocOffre.java
+Add private Boolean notified = false; to track if the email was already sent.
+[MODIFY] 
+collocOffreRepo.java
+Add a custom query method: List<collocOffre> findByExpiryDateBeforeAndNotifiedFalseOrNotifiedIsNull(LocalDate date);
+Services & Schedulers
+[NEW] EmailService.java
+Create a service wrapping JavaMailSender to handle email delivery.
+[NEW] UserSecurityClient.java
+Create a service to fetch user details (email) using ownerId. (I will use RestTemplate or Spring Cloud Feign to mock findUserById(ownerId) assuming a standard user-service pattern).
+[NEW] ExpirationScheduler.java
+Create @Scheduled(cron = "0 0 0 * * ?") (Runs daily at midnight).
+Retrieves expired & un-notified offers.
+Calls UserSecurityClient to get the email.
+Sends email and sets offer.setNotified(true).
+[MODIFY] 
+CollocationServiceApplication.java
+Add @EnableScheduling.

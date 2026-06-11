@@ -1,0 +1,12 @@
+target/
+*.jar
+*.war
+*.ear
+.git/
+.vscode/
+.idea/
+**/target/
+**/bin/
+**/.mvn/
+**/mvnw
+**/mvnw.cmd

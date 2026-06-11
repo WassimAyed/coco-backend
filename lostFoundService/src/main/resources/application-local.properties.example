@@ -1,0 +1,14 @@
+# Copy this file to application-local.properties and edit with YOUR local database credentials
+# This file is ignored by Git - each developer has their own local configuration
+
+# Example for XAMPP (Windows) users:
+# spring.datasource.url=jdbc:mysql://localhost:3306/CoCoLostFoundDB?createDatabaseIfNotExist=true
+# spring.datasource.username=root
+# spring.datasource.password=
+# spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# Example for Ubuntu + MySQL users:
+spring.datasource.url=jdbc:mysql://localhost:3306/lost_found_db?zeroDateTimeBehavior=CONVERT_TO_NULL&serverTimezone=UTC
+spring.datasource.username=root
+spring.datasource.password=your_password
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
