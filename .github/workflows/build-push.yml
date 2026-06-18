@@ -66,13 +66,12 @@ jobs:
       # 2) Scan de sécurité Trivy : cherche les vulnérabilités (CVE) dans l'image.
       #    exit-code '0' = signale sans bloquer (mets '1' pour BLOQUER le pipeline si CVE).
       - name: Scan de sécurité Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          vuln-type: os,library
           exit-code: '0'
 
       # 3) Push vers GHCR UNIQUEMENT si le scan est passé (si exit-code '1' et CVE, on n'arrive jamais ici).
