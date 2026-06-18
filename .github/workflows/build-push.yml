@@ -51,12 +51,32 @@ jobs:
         id: meta
         run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & Push ${{ matrix.image }}
+      # 1) On construit l'image SANS la pousser, et on la "charge" dans Docker
+      #    pour que Trivy puisse la scanner localement.
+      - name: Build ${{ matrix.image }} (local, pas encore de push)
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.dir }}
           file: ./${{ matrix.dir }}/Dockerfile
-          push: true
+          load: true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:latest
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ github.sha }}
+
+      # 2) Scan de sécurité Trivy : cherche les vulnérabilités (CVE) dans l'image.
+      #    exit-code '0' = signale sans bloquer (mets '1' pour BLOQUER le pipeline si CVE).
+      - name: Scan de sécurité Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: '0'
+
+      # 3) Push vers GHCR UNIQUEMENT si le scan est passé (si exit-code '1' et CVE, on n'arrive jamais ici).
+      - name: Push ${{ matrix.image }} vers GHCR
+        run: |
+          docker push ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:latest
+          docker push ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ github.sha }}
