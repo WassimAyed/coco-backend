@@ -30,6 +30,10 @@
         <java.version>17</java.version>
         <spring-cloud.version>2025.1.0</spring-cloud.version>
 
+        <!-- Sécurité : force Tomcat 11.0.22 (corrige les CVE détectées par Trivy,
+             le parent Spring Boot 4.0.6 ne fournit que 11.0.21) -->
+        <tomcat.version>11.0.22</tomcat.version>
+
         <!-- SonarQube -->
         <sonar.host.url>http://192.168.5.148:9000</sonar.host.url>
         <sonar.projectKey>covoiturage-service</sonar.projectKey>
@@ -107,6 +111,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Sécurité : force BouncyCastle 1.84 (corrige CVE-2026-5598, fuite de clé privée).
+             Dépendance transitive non remontée par le parent → on la fixe explicitement. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.84</version>
+        </dependency>
 
     </dependencies>
 
