@@ -79,3 +79,38 @@ jobs:
         run: |
           docker push ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:latest
           docker push ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ github.sha }}
+
+  # =====================================================================
+  #  ÉTAGE CD (Continuous Deployment) — vrai GitOps
+  #  Une fois TOUTES les images construites et poussées, on écrit le tag
+  #  (= SHA du commit) dans le repo coco-gitops. ArgoCD voit le changement
+  #  et synchronise le cluster automatiquement.
+  #  'needs: build' => ne s'exécute qu'APRÈS le succès des 4 builds.
+  # =====================================================================
+  update-gitops:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du repo GitOps
+        uses: actions/checkout@v4
+        with:
+          repository: WassimAyed/coco-gitops
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}   # token avec droit d'écriture sur coco-gitops
+
+      - name: Mettre à jour les tags d'image (= SHA du commit)
+        run: |
+          TAG=${{ github.sha }}
+          # yq est préinstallé sur les runners ubuntu-latest (mikefarah/yq v4)
+          yq -i ".eureka.tag = \"$TAG\"" coco/values.yaml
+          yq -i ".userService.tag = \"$TAG\"" coco/values.yaml
+          yq -i ".covoiturageService.tag = \"$TAG\"" coco/values.yaml
+          yq -i ".apiGateway.tag = \"$TAG\"" coco/values.yaml
+
+      - name: Commit & push vers coco-gitops
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coco/values.yaml
+          git commit -m "CD: déploiement backend ${{ github.sha }}" || echo "Aucun changement à committer"
+          git push
