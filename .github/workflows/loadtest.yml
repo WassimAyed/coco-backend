@@ -7,7 +7,7 @@ on:
 jobs:
   loadtest:
     # Tourne sur le self-hosted runner installé sur le master (accès au réseau privé + microk8s)
-    runs-on: [self-hosted, cluster]
+    runs-on: self-hosted
     steps:
       - name: Récupérer le code (script k6)
         uses: actions/checkout@v4
