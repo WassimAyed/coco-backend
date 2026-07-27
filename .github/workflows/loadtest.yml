@@ -6,10 +6,10 @@ on:
 
 jobs:
   loadtest:
-    # Tourne sur le self-hosted runner installé sur le master (accès au réseau privé + microk8s)
+    # Tourne sur le self-hosted runner installé sur le master (accès réseau privé + microk8s)
     runs-on: self-hosted
     steps:
-      - name: Récupérer le code (script k6)
+      - name: Récupérer le code (manifeste k6)
         uses: actions/checkout@v4
 
       - name: État AVANT la charge
@@ -18,22 +18,25 @@ jobs:
           microk8s kubectl -n coco get hpa covoiturage-service
           microk8s kubectl -n coco get pods -l app=covoiturage-service
 
-      - name: Charge k6 + observation de l'autoscaling (scale UP)
+      - name: Lancer le test de charge k6 (Job in-cluster)
         run: |
-          echo "===== Lancement de k6 en tâche de fond ====="
-          k6 run loadtest/load-test.js &
-          K6_PID=$!
-          # Échantillonne l'HPA et le nombre de pods toutes les 15 s pendant ~3 min
-          for i in $(seq 1 13); do
+          microk8s kubectl -n coco delete job k6-loadtest --ignore-not-found
+          microk8s kubectl apply -f loadtest/k6-job.yaml
+
+      - name: Observer l'autoscaling (scale UP)
+        run: |
+          echo "===== k6 charge covoiturage EN DIRECT -> l'HPA doit ajouter des pods ====="
+          for i in $(seq 1 12); do
             sleep 15
             PODS=$(microk8s kubectl -n coco get pods -l app=covoiturage-service --no-headers | wc -l)
             HPA=$(microk8s kubectl -n coco get hpa covoiturage-service --no-headers)
             echo "t+$((i*15))s | pods=$PODS | HPA: $HPA"
           done
-          wait $K6_PID
-          echo "===== k6 terminé ====="
 
-      - name: Observation du retour au calme (scale DOWN)
+      - name: Résultats k6
+        run: microk8s kubectl -n coco logs job/k6-loadtest | tail -30
+
+      - name: Observer le retour au calme (scale DOWN)
         run: |
           echo "===== Trafic arrêté : l'HPA va réduire les pods ====="
           for i in $(seq 1 9); do
@@ -43,8 +46,9 @@ jobs:
             echo "scale-down t+$((i*20))s | pods=$PODS | HPA: $HPA"
           done
 
-      - name: État APRÈS retour au calme
+      - name: État APRÈS + nettoyage du Job
+        if: always()
         run: |
-          echo "===== HPA + pods APRÈS charge ====="
           microk8s kubectl -n coco get hpa covoiturage-service
           microk8s kubectl -n coco get pods -l app=covoiturage-service
+          microk8s kubectl -n coco delete job k6-loadtest --ignore-not-found

@@ -1,0 +1,51 @@
+# =====================================================================
+#  k6 en Job Kubernetes — test de charge LANCÉ DANS le cluster.
+#  Tape covoiturage-service EN DIRECT (port 8092, endpoint /covoiturage/all),
+#  donc sans dépendre de l'ingress ni de l'api-gateway.
+#  But : faire monter le CPU de covoiturage -> déclencher l'HPA.
+#  Lancé par le workflow loadtest.yml (kubectl apply).
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-script
+  namespace: coco
+data:
+  load-test.js: |
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    const BASE_URL = __ENV.BASE_URL || 'http://covoiturage-service:8092';
+    export const options = {
+      stages: [
+        { duration: '30s', target: 80 },  // montée à 80 utilisateurs virtuels
+        { duration: '90s', target: 80 },  // charge soutenue -> CPU monte -> HPA scale UP
+        { duration: '30s', target: 0 },   // arrêt -> HPA scale DOWN ensuite
+      ],
+    };
+    export default function () {
+      const res = http.get(`${BASE_URL}/covoiturage/all`);
+      check(res, { 'status 200': (r) => r.status === 200 });
+      sleep(0.2);
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-loadtest
+  namespace: coco
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:latest
+          args: ["run", "/scripts/load-test.js"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: k6-script
