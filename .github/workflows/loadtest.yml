@@ -1,0 +1,50 @@
+name: Load Test + HPA Autoscaling (k6)
+
+# Déclenchement MANUEL depuis l'onglet Actions (on ne veut pas charger le cluster à chaque push)
+on:
+  workflow_dispatch: {}
+
+jobs:
+  loadtest:
+    # Tourne sur le self-hosted runner installé sur le master (accès au réseau privé + microk8s)
+    runs-on: [self-hosted, cluster]
+    steps:
+      - name: Récupérer le code (script k6)
+        uses: actions/checkout@v4
+
+      - name: État AVANT la charge
+        run: |
+          echo "===== HPA + pods AVANT charge ====="
+          microk8s kubectl -n coco get hpa covoiturage-service
+          microk8s kubectl -n coco get pods -l app=covoiturage-service
+
+      - name: Charge k6 + observation de l'autoscaling (scale UP)
+        run: |
+          echo "===== Lancement de k6 en tâche de fond ====="
+          k6 run loadtest/load-test.js &
+          K6_PID=$!
+          # Échantillonne l'HPA et le nombre de pods toutes les 15 s pendant ~3 min
+          for i in $(seq 1 13); do
+            sleep 15
+            PODS=$(microk8s kubectl -n coco get pods -l app=covoiturage-service --no-headers | wc -l)
+            HPA=$(microk8s kubectl -n coco get hpa covoiturage-service --no-headers)
+            echo "t+$((i*15))s | pods=$PODS | HPA: $HPA"
+          done
+          wait $K6_PID
+          echo "===== k6 terminé ====="
+
+      - name: Observation du retour au calme (scale DOWN)
+        run: |
+          echo "===== Trafic arrêté : l'HPA va réduire les pods ====="
+          for i in $(seq 1 9); do
+            sleep 20
+            PODS=$(microk8s kubectl -n coco get pods -l app=covoiturage-service --no-headers | wc -l)
+            HPA=$(microk8s kubectl -n coco get hpa covoiturage-service --no-headers)
+            echo "scale-down t+$((i*20))s | pods=$PODS | HPA: $HPA"
+          done
+
+      - name: État APRÈS retour au calme
+        run: |
+          echo "===== HPA + pods APRÈS charge ====="
+          microk8s kubectl -n coco get hpa covoiturage-service
+          microk8s kubectl -n coco get pods -l app=covoiturage-service
